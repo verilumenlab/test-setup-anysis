@@ -7,7 +7,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = "// ----- STUCK-AT PAYLOAD"
-WFT = "  W WFT_50MHZ;"
 
 IR_BITS = 32
 SIB_BITS = 64
@@ -105,9 +104,13 @@ def patch_header(text: str, sib: str, tdr: str) -> str:
     return text
 
 
+PATTERN_RE = re.compile(r"^Pattern\s+\w+\s*\{[ \t]*\n", re.M)
+
+
 def expand_stuck(path: Path) -> int:
     text = path.read_text(encoding="utf-8", errors="replace")
-    if MARKER not in text or WFT not in text:
+    pat = PATTERN_RE.search(text)
+    if MARKER not in text or not pat:
         raise SystemExit(f"unexpected layout: {path.name}")
     m = re.search(r"dft_partition\s*=\s*dft_part_(\d+)", text)
     tdr_m = re.search(r"ijtag_tdr\s*=\s*([01]+)", text)
@@ -117,8 +120,8 @@ def expand_stuck(path: Path) -> int:
     raw_tdr = tdr_m.group(1)
     tdr8 = raw_tdr[-8:] if len(raw_tdr) >= 8 else raw_tdr.ljust(8, "0")
     setup, n, sib, tdr = build_setup(part, tdr8)
-    pre, _, rest = text.partition(WFT)
-    _, _, payload = rest.partition(MARKER)
+    pre = text[: pat.end()]
+    payload = text.split(MARKER, 1)[1]
     new = patch_header(pre, sib, tdr) + setup + MARKER + payload
     path.write_text(new, encoding="utf-8")
     return n

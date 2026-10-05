@@ -125,7 +125,7 @@ class Handler(SimpleHTTPRequestHandler):
                     }
                 )
             with HwRecorder() as rec:
-                payload = optimize_many(items)
+                payload = optimize_many(items, req.get("reviews") or {})
             payload["hw_peak"] = rec.snapshot()
             self._json(200, payload)
             return

@@ -104,6 +104,22 @@ ScanStructures {
 MacroDefs {
   "scan_shift" {
     W WFT_50MHZ;
+    Shift { V { "si_0" = #; "so_0" = #; "si_1" = #; "so_1" = #; "si_2" = #; "so_2" = #; "si_3" = #; "so_3" = #; "CLK" = 1; } }
+    W WFT_50MHZ;
+  }
+}
+
+PatternBurst scanpats {
+  PatList { scan_test; }
+}
+
+PatternExec {
+  Timing;
+  PatternBurst scanpats;
+}
+
+Pattern scan_test {
+  W WFT_50MHZ;
   // ----- RESET PORTION (top) -----
   Ann {* reset_portion: assert RESET and TRST *}
   Ann {* "cycle_number:0 vector_type:TEST_SETUP" *}

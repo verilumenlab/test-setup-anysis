@@ -422,7 +422,10 @@ def emit_optimized_setup(classified: list[dict]) -> str:
 
 def rewrite_optimized(text: str, classified: list[dict]) -> str:
     start = re.search(r"(Pattern\s+\w+\s*\{\s*\n\s*W\s+\S+\s*;\s*\n)", text)
-    end = re.search(r"\n\s*// ----- STUCK-AT PAYLOAD|\n\s*Ann \{\*\s*\"cycle_number:\d+\s+pattern_numer:", text)
+    end = re.search(
+        r"\n\s*// ----- (?:STUCK-AT|SCAN_SHIFT|MBIST) PAYLOAD|\n\s*Ann \{\*\s*\"cycle_number:\d+\s+pattern_numer:",
+        text,
+    )
     if not start or not end:
         return text
     return text[: start.end()] + emit_optimized_setup(classified) + text[end.start() + 1 :]
@@ -484,14 +487,19 @@ def summarize_ltd(classified: list[dict]) -> dict:
     }
 
 
-def optimize_stil(path: Path, raw: str | None = None, classified: list[dict] | None = None) -> dict:
+def optimize_stil(
+    path: Path,
+    raw: str | None = None,
+    classified: list[dict] | None = None,
+    reviews: dict | None = None,
+) -> dict:
     from ltd_gbc import apply_ltd
 
     text = raw if raw is not None else path.read_text(encoding="utf-8", errors="replace")
     name = path.name if path else "upload.stil"
     if classified is None:
         classified = classify_cycles(extract_setup_cycles(text))
-    classified, meta = apply_ltd(classified, name)
+    classified, meta = apply_ltd(classified, name, reviews)
     for c in classified:
         c["decision"] = "reject" if c.get("final") == "remove" else "keep"
     summary = summarize_ltd(classified)
@@ -503,8 +511,10 @@ def optimize_stil(path: Path, raw: str | None = None, classified: list[dict] | N
     return summary
 
 
-def optimize_many(items: list[dict]) -> dict:
+def optimize_many(items: list[dict], reviews: dict | None = None) -> dict:
     from ltd_gbc import train_gbc
+
+    reviews = reviews or {}
 
     prepared = []
     for item in items:
@@ -518,7 +528,10 @@ def optimize_many(items: list[dict]) -> dict:
 
     files = []
     for p in prepared:
-        files.append(optimize_stil(p["path"], raw=p["text"], classified=p["classified"]))
+        name = p["path"].name if p["path"] else "upload.stil"
+        files.append(
+            optimize_stil(p["path"], raw=p["text"], classified=p["classified"], reviews=reviews.get(name))
+        )
     if not files:
         return {"files": [], "shared": {}}
     first = files[0]

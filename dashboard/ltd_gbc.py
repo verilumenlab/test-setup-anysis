@@ -202,9 +202,18 @@ def ltd_action(protected: bool, p_cut: float) -> str:
     return "defer"
 
 
-def apply_ltd(classified: list[dict], file_name: str) -> tuple[list[dict], dict]:
+def apply_ltd(
+    classified: list[dict], file_name: str, client_reviews: dict | None = None
+) -> tuple[list[dict], dict]:
     model = _model()
     reviews = review_map(file_name)
+    for k, v in (client_reviews or {}).items():
+        try:
+            idx = int(k)
+        except (TypeError, ValueError):
+            continue
+        if v in ("keep", "remove"):
+            reviews[idx] = v
     proba_rows = None
     if model is not None and classified:
         proba_rows = model.predict_proba([_vec(c.get("features") or {}) for c in classified])

@@ -14,7 +14,24 @@ const state = {
   commonalityMin: 90,
   browseOpen: false,
   browsePage: 0,
+  reviews: loadReviews(),
+  reviewMsg: "",
+  reviewBusy: false,
 };
+
+function loadReviews() {
+  try {
+    return JSON.parse(localStorage.getItem("stilReviews") || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveReviewsLocal() {
+  try {
+    localStorage.setItem("stilReviews", JSON.stringify(state.reviews));
+  } catch {}
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -883,6 +900,7 @@ function downloadExploreReport() {
 }
 
 function openOptimize() {
+  state.reviewMsg = "";
   $("optModal").classList.remove("hidden");
   $("optStatus").textContent = "Optimizing setup clocks…";
   $("optBody").innerHTML = "";
@@ -918,7 +936,7 @@ async function runOptimize() {
     const res = await fetch("/api/optimize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ names, uploads }),
+      body: JSON.stringify({ names, uploads, reviews: state.reviews }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "optimize failed");
@@ -940,9 +958,15 @@ function groupList(groups, mode) {
       const idxs = g.cycles || [];
       const clocks = idxs.join(",");
       const ranges = clockRanges(idxs);
-      const btns = `<div class="review-btns">
-          <button type="button" class="btn-keep" data-rev="keep" data-gi="${i}">Keep</button>
-          <button type="button" class="btn-remove" data-rev="remove" data-gi="${i}">Reject</button>
+      const dis = state.reviewBusy ? " disabled" : "";
+      const btns =
+        mode === "removed"
+          ? `<div class="review-btns">
+          <button type="button" class="btn-keep" data-rev="keep" data-gi="${i}"${dis}>Undo — Keep</button>
+        </div>`
+          : `<div class="review-btns">
+          <button type="button" class="btn-keep" data-rev="keep" data-gi="${i}"${dis}>Keep</button>
+          <button type="button" class="btn-remove" data-rev="remove" data-gi="${i}"${dis}>Reject</button>
         </div>`;
       return `<div class="opt-item" data-cycles="${esc(clocks)}">
         <div><strong>${esc(g.label)}</strong> · ${g.count || idxs.length} clock(s)</div>
@@ -1048,14 +1072,17 @@ function renderOptimize(data) {
   const ltd = s.ltd || {};
   const gpu = (data.cuda && data.cuda.device) || (s.cuda && s.cuda.device);
   const filter = state.optimizeRoleFilter || "all";
-  $("optStatus").textContent = (s.note || "") + (gpu ? ` Running on CUDA (${gpu}).` : "");
+  $("optStatus").textContent =
+    state.reviewMsg || (s.note || "") + (gpu ? ` Running on CUDA (${gpu}).` : "");
   const showKeep = filter === "all" || filter === "keep";
   const showReject = filter === "all" || filter === "reject";
+  const before = s.before_clocks ?? 0;
+  const cut = s.cut_clocks ?? 0;
   $("optBody").innerHTML = `
     <div class="opt-summary">
-      <div class="stat"><b>${s.before_clocks ?? "—"}</b><span>setup clocks</span></div>
-      <div class="stat"><b>${s.review_clocks ?? "—"}</b><span>need your review</span></div>
-      <div class="stat"><b>${s.cut_clocks ?? "—"}</b><span>you removed</span></div>
+      <div class="stat"><b>${before - cut}</b><span>setup clocks in download (was ${before})</span></div>
+      <div class="stat"><b>${cut}</b><span>clocks you rejected</span></div>
+      <div class="stat"><b>${s.review_clocks ?? "—"}</b><span>still waiting for your review</span></div>
       <div class="stat"><b>${ltd.n_reviews ?? 0}</b><span>labels in the GBC so far</span></div>
     </div>
     ${roleFilterBar("optimize", filter)}
@@ -1079,8 +1106,16 @@ function renderOptimize(data) {
       </div>`
           : ""
       }
+      ${
+        showReject
+          ? `<div class="opt-col reject">
+        <h3>Rejected by you — cut from download</h3>
+        <p class="caption">These clocks are removed when you click Download optimized STIL. Undo puts them back.</p>
+        ${groupList(s.removed || [], "removed")}
+      </div>`
+          : ""
+      }
     </div>
-    ${showReject && (s.removed || []).length ? `<h3>Rejected after your review</h3>${groupList(s.removed, "keep")}` : ""}
   `;
   bindRoleFilter($("optBody"), "optimize", () => renderOptimize(data));
   $("optBody").querySelectorAll("[data-rev]").forEach((btn) => {
@@ -1094,29 +1129,22 @@ async function submitReview(label, itemEl) {
     .split(",")
     .map((s) => parseInt(s.trim(), 10))
     .filter((n) => !Number.isNaN(n));
-  const file = (state.lastOptimize.files || [])[0]?.file;
-  const cycleMeta = ((state.lastOptimize.files || [])[0]?.cycles || []).concat(
-    (state.lastOptimize.shared && []) || []
-  );
-  const byIdx = {};
-  (state.lastOptimize.files || []).forEach((f) => {
-    (f.cycles || []).forEach((c) => {
-      byIdx[`${f.file}:${c.index}`] = c;
-    });
-  });
+  if (!cycles.length || state.reviewBusy) return;
+  const groupName = itemEl.querySelector("strong")?.textContent || "group";
   const items = [];
   for (const f of state.lastOptimize.files || []) {
+    const perFile = (state.reviews[f.file] = state.reviews[f.file] || {});
     for (const idx of cycles) {
+      perFile[idx] = label;
       const c = (f.cycles || []).find((x) => x.index === idx) || {};
-      items.push({
-        file: f.file,
-        index: idx,
-        label,
-        features: c.features || {},
-      });
+      items.push({ file: f.file, index: idx, label, features: c.features || {} });
     }
   }
-  $("optStatus").textContent = `Saving ${label} for ${cycles.length} clock(s), retraining GBC…`;
+  saveReviewsLocal();
+  const verb = label === "remove" ? "Rejected" : "Kept";
+  state.reviewBusy = true;
+  state.reviewMsg = `${label === "remove" ? "Rejecting" : "Keeping"} ${cycles.length} clock(s): ${groupName}…`;
+  renderOptimize(state.lastOptimize);
   startHwWatch(["hwOptimize"]);
   try {
     const res = await fetch("/api/review", {
@@ -1124,13 +1152,19 @@ async function submitReview(label, itemEl) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ items }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "review failed");
-    $("optStatus").textContent = `Saved ${data.saved} label(s). Model trained=${data.model && data.model.trained}. Reloading…`;
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "review failed");
+    }
     await runOptimize();
+    const s = (state.lastOptimize && state.lastOptimize.shared) || {};
+    state.reviewMsg = `${verb} ${cycles.length} clock(s): ${groupName}. Download now has ${(s.before_clocks ?? 0) - (s.cut_clocks ?? 0)} setup clocks.`;
   } catch (err) {
-    $("optStatus").textContent = String(err.message || err);
+    state.reviewMsg = `Could not save: ${String(err.message || err)}`;
     freezeHw(["hwOptimize"], state.lastOptimizePeak || (state.lastOptimize && state.lastOptimize.hw_peak));
+  } finally {
+    state.reviewBusy = false;
+    if (state.lastOptimize) renderOptimize(state.lastOptimize);
   }
 }
 
