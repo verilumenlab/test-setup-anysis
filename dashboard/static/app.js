@@ -387,6 +387,68 @@ function clockRanges(indices) {
 
 const BROWSE_PAGE = 25;
 
+function groupAllClocks(cycles) {
+  const map = new Map();
+  for (const c of cycles) {
+    const rec = c.recommend === "redundant" ? "redundant" : "keep";
+    const key = `${c.label}\0${rec}`;
+    if (!map.has(key)) map.set(key, { label: c.label, recommend: rec, rows: [] });
+    map.get(key).rows.push(c);
+  }
+  return [...map.values()].map((g) => {
+    const rows = g.rows.sort((a, b) => a.index - b.index);
+    const matched = rows.filter((c) => c.match_all).length;
+    const avg = rows.reduce((s, c) => s + (c.pct ?? 0), 0) / (rows.length || 1);
+    return {
+      ...g,
+      rows,
+      count: rows.length,
+      matched,
+      pct: Math.round((1000 * matched) / (rows.length || 1)) / 10,
+      avg: Math.round(avg * 10) / 10,
+      clocks: clockRanges(rows.map((c) => c.index)),
+    };
+  });
+}
+
+function scoreRuns(rows) {
+  const runs = [];
+  for (const c of rows) {
+    const last = runs[runs.length - 1];
+    const tag = `${c.pct}|${c.agree_n}|${c.files_n}`;
+    if (last && last.tag === tag && c.index === last.end + 1) {
+      last.end = c.index;
+    } else {
+      runs.push({ tag, start: c.index, end: c.index, pct: c.pct, agree: c.agree_n, files: c.files_n, all: c.match_all });
+    }
+  }
+  return runs;
+}
+
+function stepScoreTable(cycles, rowClass) {
+  const groups = groupAllClocks(cycles);
+  if (!groups.length) return `<tr><td>No setup clocks.</td></tr>`;
+  let html = `<tr><th>What</th><th>Tester clocks</th><th>Step commonality</th><th>Per-clock score</th><th>Recommend</th></tr>`;
+  for (const g of groups) {
+    const cls = g.matched === g.count ? rowClass.same : rowClass.diff;
+    const runs = scoreRuns(g.rows)
+      .map((r) => {
+        const span = r.start === r.end ? `#${r.start}` : `#${r.start}–${r.end}`;
+        const who = r.all ? "all files" : `${r.agree}/${r.files} files`;
+        return `<div class="per-file"><span class="pf-name">${span}</span><span class="pf-val">${r.pct}% · ${who}</span></div>`;
+      })
+      .join("");
+    html += `<tr class="${cls}">
+      <td>${esc(g.label)} · ${g.count} clock(s)</td>
+      <td>${esc(g.clocks)}</td>
+      <td><b>${g.pct}%</b><div class="caption">${g.matched} / ${g.count} identical in all files${g.avg !== g.pct ? ` · avg per-clock ${g.avg}%` : ""}</div></td>
+      <td><details class="fold"><summary>${g.count} clock(s) — expand</summary>${runs}</details></td>
+      <td><span class="tag tag-${g.recommend}">${g.recommend === "redundant" ? "Redundant" : "Keep"}</span></td>
+    </tr>`;
+  }
+  return html;
+}
+
 function groupCommonClocks(cycles) {
   const map = new Map();
   for (const c of cycles) {
@@ -465,18 +527,9 @@ function renderCommonality(compare) {
         })
         .join("")
     : "";
-  const commonGroups = groupCommonClocks(com.cycles || []);
   const commonEl = $("commonClocksTable");
   if (commonEl) {
-    if (!commonGroups.length) {
-      commonEl.innerHTML = `<tr><td>No clocks are identical in every selected file.</td></tr>`;
-    } else {
-      let html = `<tr><th>What</th><th>Tester clocks</th><th>Recommend</th></tr>`;
-      for (const g of commonGroups) {
-        html += `<tr class="table-same"><td>${esc(g.label)} · ${g.count} clock(s)</td><td>${esc(g.clocks)}</td><td><span class="tag tag-${g.recommend}">${g.recommend === "redundant" ? "Redundant" : "Keep"}</span></td></tr>`;
-      }
-      commonEl.innerHTML = html;
-    }
+    commonEl.innerHTML = stepScoreTable(com.cycles || [], { same: "table-same", diff: "table-diff" });
   }
   const uncommon = (com.cycles || []).filter((c) => !c.match_all);
   const uncommonEl = $("uncommonClocksTable");
@@ -635,16 +688,8 @@ function htmlTable(rows, reports, emptyText, kind) {
 function clockReportHtml(compare) {
   const com = compare && compare.commonality;
   if (!com || com.pct == null || (com.files_n || 0) < 2) return "";
-  const groups = groupCommonClocks(com.cycles || []);
   const uncommon = (com.cycles || []).filter((c) => !c.match_all);
-  let commonTbl = "<p class='empty-note'>No clocks are identical in every selected file.</p>";
-  if (groups.length) {
-    commonTbl = `<table><thead><tr><th>What</th><th>Tester clocks</th><th>Recommend</th></tr></thead><tbody>`;
-    for (const g of groups) {
-      commonTbl += `<tr class="same"><td>${esc(g.label)} · ${g.count} clock(s)</td><td>${esc(g.clocks)}</td><td>${g.recommend === "redundant" ? "Redundant" : "Keep"}</td></tr>`;
-    }
-    commonTbl += "</tbody></table>";
-  }
+  const commonTbl = `<table>${stepScoreTable(com.cycles || [], { same: "same", diff: "diff" })}</table>`;
   let uncommonTbl = `<p class='empty-note'>Every TEST_SETUP clock matches in all ${com.files_n} files.</p>`;
   if (uncommon.length) {
     uncommonTbl = `<table><thead><tr><th>Clock</th><th>Per file</th><th>Recommend</th></tr></thead><tbody>`;
@@ -657,8 +702,8 @@ function clockReportHtml(compare) {
     uncommonTbl += "</tbody></table>";
   }
   return `
-  <h2>Clocks that are common</h2>
-  <p class="caption">${com.matched} / ${com.clocks} clocks identical in all ${com.files_n} files.</p>
+  <h2>Commonality score by clock group</h2>
+  <p class="caption">${com.matched} / ${com.clocks} clocks identical in all ${com.files_n} files. Each step shows its own score and every clock's score.</p>
   ${commonTbl}
   <h2>Clocks that are not common</h2>
   <p class="caption">${com.unmatched} clocks differ across the selected files.</p>
