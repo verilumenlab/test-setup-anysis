@@ -1,0 +1,129 @@
+/*****************************************************************************
+ * File       : structural_atpg.stil
+ * Design     : DUT_TOP
+ * ATPG Type  : STRUCTURAL  (Stuck-At + Transition Delay)
+ * Source     : Structural ATPG tool run #1 (scan-based)
+ * Notes      : Independently generated deck. Carries its own copy of the
+ *              reset / initialization procedures (see Section 2.3 of the
+ *              companion technical document for why this matters).
+ *****************************************************************************/
+STIL 1.0;
+
+Header {
+  Title "DUT_TOP Structural ATPG Patterns (Stuck-At / Transition)";
+  Date "2026-08-02";
+  Source "ATPG_TOOL_A v21.3 -- structural scan compression flow";
+  History { Annotation "Generated from scan-inserted netlist rev G4"; }
+}
+
+Signals {
+  TCK      In;
+  TMS      In;
+  TDI      In;
+  TDO      Out;
+  TRST     In;
+  PORB     In;
+  CLK      In;
+  RESETN   In;
+  SE       In;      // scan enable
+  SI0      In;       SI1  In;      SI2  In;      SI3  In;
+  SO0      Out;       SO1  Out;      SO2  Out;      SO3  Out;
+  DATA_IN  In;
+  DATA_OUT Out;
+  VALID    In;
+  READY    Out;
+}
+
+SignalGroups {
+  "ScanChains_In"  = 'SI0 + SI1 + SI2 + SI3';
+  "ScanChains_Out" = 'SO0 + SO1 + SO2 + SO3';
+  "PowerPins"      = 'PORB';
+  "JTAGPins"       = 'TCK + TMS + TDI + TDO + TRST';
+  "FuncIn"         = 'DATA_IN + VALID';
+  "FuncOut"        = 'DATA_OUT + READY';
+}
+
+Timing {
+  WaveformTable WFT_100MHz {
+    Period '10ns';
+    Waveforms {
+      CLK      { '0' D/U { '0ns' Z; '5ns' U; } '1' D/D { '0ns' Z; '5ns' D; } }
+      TCK      { '0' D/U { '0ns' Z; '5ns' U; } '1' D/D { '0ns' Z; '5ns' D; } }
+      RESETN   { 'X' X { '0ns' X; } '0' D { '0ns' D; } '1' U { '0ns' U; } }
+      DATA_IN  { '0' D { '1ns' D; } '1' U { '1ns' U; } }
+      DATA_OUT { 'H' X { '8ns' X; } 'L' X { '8ns' X; } }
+      SI0      { '0' D { '1ns' D; } '1' U { '1ns' U; } }
+      SO0      { 'H' X { '8ns' X; } 'L' X { '8ns' X; } }
+    }
+  }
+}
+
+Procedures {
+
+  // --- Reset / initialization procedures -----------------------------
+  Procedure power_on_reset {
+    W PowerWave;
+    V { PORB=0; TCK=0; TMS=1; RESETN=0; } Ann {"assert power-on reset"}
+    WaitCycles 20;
+    V { PORB=1; } Ann {"release PORB"}
+    WaitCycles 10;
+    V { TRST=0; } Ann {"assert TAP reset"}
+    WaitCycles 5;
+    V { TRST=1; } Ann {"release TAP reset"}
+    WaitCycles 8;
+    V { RESETN=1; } Ann {"release core reset"}
+    WaitCycles 4;
+  }
+
+  Procedure scan_reset_all_chains {
+    V { SE=1; } Ann {"enable scan mode"}
+    Repeat 6 {
+      W WFT_100MHz;
+      V { SI0=0; SI1=0; SI2=0; SI3=0; CLK=P; } Ann {"flush scan chains to known 0 state"}
+    }
+    V { SE=0; } Ann {"disable scan mode"}
+  }
+
+  // --- Scan load / unload ---------------------------------------------
+  Procedure scan_load_unload {
+    V { SE=1; }
+    Repeat 128 {
+      W WFT_100MHz;
+      V { SI0=#; SI1=#; SI2=#; SI3=#; CLK=P; SO0=#; SO1=#; SO2=#; SO3=#; }
+    }
+    V { SE=0; }
+  }
+
+  Procedure capture {
+    W WFT_100MHz;
+    V { CLK=P; } Ann {"single capture pulse"}
+  }
+}
+
+PatternBurst "structural_burst" {
+  PatList {
+    "reset_init";
+    "structural_patterns";
+  }
+}
+
+PatternExec {
+  PatternBurst "structural_burst";
+}
+
+Pattern reset_init {
+  Call power_on_reset;
+  Call scan_reset_all_chains;
+}
+
+Pattern structural_patterns {
+  // Representative structural (stuck-at/transition) scan pattern set.
+  // Full deck contains ~48,500 patterns; excerpt shown below.
+  Call scan_load_unload;
+  Call capture;
+  Call scan_load_unload;
+  Call capture;
+  Call scan_load_unload;
+  Call capture;
+  Ann {"... 48,497 additional scan patterns omitted from excerpt ..."}
+}

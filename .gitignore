@@ -5,6 +5,7 @@ venv/
 .env
 .env.*
 dashboard/models/*.pt
+!dashboard/models/ltd_gbc_cuda.pt
 dashboard/models/*.joblib
 *.log
 .DS_Store

@@ -1,0 +1,122 @@
+/*****************************************************************************
+ * File       : pattern_functional.stil
+ * Design     : DUT_TOP
+ * ATPG Type  : PATTERN-BASED / FUNCTIONAL  (user-defined + JTAG boundary-scan)
+ * Source     : Hand-written / semi-automated functional test bench,
+ *              converted to STIL by the functional-test team (not an ATPG
+ *              tool run at all -- a common third source of STIL decks).
+ * Notes      : Reset intent is the same DUT initialization as the other two
+ *              decks, but implemented via a JTAG-driven path (TAP-controller
+ *              instruction shift) rather than a direct pin-level force --
+ *              a "partially common" match (~76% similarity) rather than a
+ *              100% match, per the commonality-check methodology.
+ *****************************************************************************/
+STIL 1.0;
+
+Header {
+  Title "DUT_TOP Functional / JTAG Boundary-Scan Patterns";
+  Date "2026-08-25";
+  Source "Functional Test Bench v3.2 -- manually authored, STIL-exported";
+  History { Annotation "Targets same netlist rev G4; validates DATA_IN/DATA_OUT datapath"; }
+}
+
+Signals {
+  TCK      In;
+  TMS      In;
+  TDI      In;
+  TDO      Out;
+  TRST     In;
+  PORB     In;
+  CLK      In;
+  RESETN   In;
+  SE       In;
+  SI0      In;       SI1  In;      SI2  In;      SI3  In;
+  SO0      Out;       SO1  Out;      SO2  Out;      SO3  Out;
+  DATA_IN  In;
+  DATA_OUT Out;
+  VALID    In;
+  READY    Out;
+}
+
+SignalGroups {
+  "ScanChains_In"  = 'SI0 + SI1 + SI2 + SI3';
+  "ScanChains_Out" = 'SO0 + SO1 + SO2 + SO3';
+  "PowerPins"      = 'PORB';
+  "JTAGPins"       = 'TCK + TMS + TDI + TDO + TRST';
+  "FuncIn"         = 'DATA_IN + VALID';
+  "FuncOut"        = 'DATA_OUT + READY';
+}
+
+// Identical Timing block to the other two decks -- 100%-confidence match.
+Timing {
+  WaveformTable WFT_100MHz {
+    Period '10ns';
+    Waveforms {
+      CLK      { '0' D/U { '0ns' Z; '5ns' U; } '1' D/D { '0ns' Z; '5ns' D; } }
+      TCK      { '0' D/U { '0ns' Z; '5ns' U; } '1' D/D { '0ns' Z; '5ns' D; } }
+      RESETN   { 'X' X { '0ns' X; } '0' D { '0ns' D; } '1' U { '0ns' U; } }
+      DATA_IN  { '0' D { '1ns' D; } '1' U { '1ns' U; } }
+      DATA_OUT { 'H' X { '8ns' X; } 'L' X { '8ns' X; } }
+      SI0      { '0' D { '1ns' D; } '1' U { '1ns' U; } }
+      SO0      { 'H' X { '8ns' X; } 'L' X { '8ns' X; } }
+    }
+  }
+}
+
+Procedures {
+
+  // --- Reset / initialization procedure --------------------------------
+  // Same *intent* as power_on_reset / poweron_rst_ca (bring DUT to a known
+  // state before pattern application) but a structurally different
+  // implementation: drives PORB directly (common with the other two decks)
+  // but then walks the TAP controller through TEST-LOGIC-RESET via TMS
+  // sequencing instead of a direct TRST pulse, and never touches the scan
+  // chains at all (no scan_reset equivalent -- this deck is non-scan).
+  Procedure jtag_functional_init {
+    W PowerWave;
+    V { PORB=0; TCK=0; TMS=1; RESETN=0; } Ann {"assert power-on reset"}
+    WaitCycles 20;
+    V { PORB=1; } Ann {"release PORB"}
+    WaitCycles 10;
+    // TAP TEST-LOGIC-RESET via 5 TCK cycles with TMS=1 (IEEE 1149.1),
+    // functionally equivalent to the direct TRST pulse in the other decks
+    Repeat 5 {
+      W WFT_100MHz;
+      V { TMS=1; TCK=P; } Ann {"walk TAP to Test-Logic-Reset"}
+    }
+    V { TMS=0; }
+    WaitCycles 8;
+    V { RESETN=1; } Ann {"release core reset"}
+    WaitCycles 4;
+  }
+
+  Procedure functional_apply {
+    W WFT_100MHz;
+    V { VALID=1; DATA_IN=#; CLK=P; } Ann {"apply functional input vector"}
+    V { READY=#; DATA_OUT=#; } Ann {"check functional output"}
+  }
+}
+
+PatternBurst "functional_burst" {
+  PatList {
+    "reset_init_func";
+    "functional_patterns";
+  }
+}
+
+PatternExec {
+  PatternBurst "functional_burst";
+}
+
+Pattern reset_init_func {
+  Call jtag_functional_init;
+}
+
+Pattern functional_patterns {
+  // Representative datapath / protocol functional vectors.
+  // Full deck contains ~640 patterns; excerpt shown below.
+  Call functional_apply;
+  Call functional_apply;
+  Call functional_apply;
+  Ann {"... 637 additional functional vectors omitted from excerpt ..."}
+}

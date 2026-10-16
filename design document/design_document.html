@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Mechanism Design Document: STIL Test-Setup Optimizer</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --card-bg: rgba(20, 27, 44, 0.85);
+      --card-hover: rgba(28, 38, 62, 0.95);
+      --border: rgba(255, 255, 255, 0.1);
+      --border-focus: #38bdf8;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --blue: #38bdf8;
+      --blue-deep: #0284c7;
+      --purple: #a855f7;
+      --green: #10b981;
+      --amber: #f59e0b;
+      --red: #f43f5e;
+      --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-main);
+      line-height: 1.6;
+      font-size: 15px;
+      background-image: 
+        radial-gradient(circle at 10% 15%, rgba(56, 189, 248, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 90% 85%, rgba(168, 85, 247, 0.08) 0%, transparent 45%);
+      min-height: 100vh;
+      padding: 0 0 60px;
+    }
+
+    /* Top bar */
+    .topbar {
+      border-bottom: 1px solid var(--border);
+      background: rgba(11, 15, 23, 0.85);
+      backdrop-filter: blur(12px);
+      padding: 14px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: #fff;
+      text-decoration: none;
+    }
+
+    .brand-pill {
+      background: linear-gradient(135deg, var(--blue), #2563eb);
+      color: #000;
+      font-size: 0.7rem;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 4px;
+      letter-spacing: 0.05em;
+    }
+
+    .btn {
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+    }
+
+    .btn-ghost {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--border);
+      color: var(--text);
+    }
+    .btn-ghost:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--blue);
+    }
+
+    .btn-primary {
+      background: var(--blue-deep);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: #0369a1;
+      transform: translateY(-1px);
+    }
+
+    /* Hero */
+    .wrap {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .hero {
+      padding: 40px 0 24px;
+      text-align: center;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      color: var(--blue);
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+
+    .hero h1 {
+      font-size: 2.3rem;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 12px;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #ffffff 40%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero p {
+      font-size: 1.05rem;
+      color: var(--text-muted);
+      max-width: 760px;
+      margin: 0 auto 30px;
+      line-height: 1.55;
+    }
+
+    /* Mechanism Overview Steps bar */
+    .flow-summary {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-bottom: 34px;
+    }
+
+    @media (max-width: 860px) {
+      .flow-summary { grid-template-columns: 1fr; }
+    }
+
+    .flow-chip {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      text-align: left;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+
+    .flow-chip:hover {
+      border-color: var(--blue);
+      transform: translateY(-2px);
+    }
+
+    .flow-num {
+      width: 24px;
+      height: 24px;
+      line-height: 24px;
+      text-align: center;
+      border-radius: 50%;
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--blue);
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .flow-chip h4 {
+      font-size: 0.9rem;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .flow-chip p {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+
+    /* Block Diagram Section */
+    .section-title {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: #fff;
+      margin: 36px 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-title span.badge {
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--blue);
+      font-weight: 600;
+    }
+
+    .diagram-card {
+      background: #0d121e;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 10px 30px -10px rgba(0,0,0,0.6);
+      overflow-x: auto;
+      margin-bottom: 30px;
+    }
+
+    svg.clean-diagram {
+      display: block;
+      width: 100%;
+      height: auto;
+      min-width: 920px;
+    }
+
+    /* Cards Grid */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 768px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 22px;
+      transition: all 0.2s ease;
+    }
+
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.18);
+      background: var(--card-hover);
+    }
+
+    .card h3 {
+      font-size: 1.05rem;
+      color: #fff;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card p {
+      color: var(--text-muted);
+      font-size: 0.88rem;
+      margin-bottom: 12px;
+    }
+
+    .card ul {
+      padding-left: 20px;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    /* Report Table Preview */
+    .table-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-top: 14px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.86rem;
+    }
+
+    th {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      vertical-align: middle;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+    .tag-keep {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--green);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      display: inline-block;
+    }
+
+    .tag-redundant {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--amber);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      display: inline-block;
+    }
+
+    .tag-defer {
+      background: rgba(168, 85, 247, 0.15);
+      color: var(--purple);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      display: inline-block;
+    }
+
+    code {
+      font-family: var(--font-mono);
+      background: rgba(0, 0, 0, 0.4);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #93c5fd;
+      font-size: 0.85em;
+    }
+
+    /* Result summary stats */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 24px 0 10px;
+    }
+
+    @media (max-width: 600px) {
+      .stats-row { grid-template-columns: 1fr; }
+    }
+
+    .stat-box {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-val {
+      font-size: 1.8rem;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      margin-bottom: 4px;
+    }
+
+    .stat-val.blue { color: var(--blue); }
+    .stat-val.green { color: var(--green); }
+    .stat-val.amber { color: var(--amber); }
+
+    .stat-label {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 30px 24px 0;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.82rem;
+      margin-top: 50px;
+    }
+
+    @media print {
+      .topbar, .btn { display: none; }
+      body { background: #fff; color: #111; }
+      .card, .diagram-card, .table-card { border-color: #ccc; background: #fff; color: #111; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header class="topbar">
+    <a href="#" class="brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+        <polyline points="2 17 12 22 22 17"></polyline>
+        <polyline points="2 12 12 17 22 12"></polyline>
+      </svg>
+      <span>STIL Test-Setup Optimizer</span>
+      <span class="brand-pill">Design Document</span>
+    </a>
+    <div style="display:flex; gap:10px;">
+      <button class="btn btn-ghost" onclick="window.print()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><path d="M6 14h12v8H6z"></path></svg>
+        Print / Save PDF
+      </button>
+      <a href="dashboard/static/index.html" class="btn btn-primary">
+        Open Dashboard &rarr;
+      </a>
+    </div>
+  </header>
+
+  <div class="wrap">
+
+    <!-- Hero Title -->
+    <div class="hero">
+      <div class="hero-badge">System Mechanism & Workflow</div>
+      <h1>How the STIL Setup Optimizer Works</h1>
+      <p>
+        A clean, straightforward mechanism: we add the STIL files, analyze their test setups clock-by-clock, apply deterministic DFT rules, run the Learning-to-Defer model, and display a review report recommending each clock as <strong>Keep</strong> or <strong>Redundant</strong>.
+      </p>
+
+      <!-- 5-Step Process Summary -->
+      <div class="flow-summary">
+        <div class="flow-chip">
+          <div class="flow-num">1</div>
+          <h4>Add STIL Files</h4>
+          <p>Select or upload pattern files (Stuck-At, ScanShift, MBIST).</p>
+        </div>
+        <div class="flow-chip">
+          <div class="flow-num">2</div>
+          <h4>Analyze Setups</h4>
+          <p>Extract TEST_SETUP, unroll loops, and score commonality.</p>
+        </div>
+        <div class="flow-chip">
+          <div class="flow-num">3</div>
+          <h4>Apply DFT Rules</h4>
+          <p>Catch duplicate holds, second TAP reset, and idle holds.</p>
+        </div>
+        <div class="flow-chip">
+          <div class="flow-num">4</div>
+          <h4>Learning-to-Defer</h4>
+          <p>Model scores confidence; defers borderline cases to human.</p>
+        </div>
+        <div class="flow-chip">
+          <div class="flow-num">5</div>
+          <h4>Report & Output</h4>
+          <p>Engineer reviews Keep vs Redundant and downloads optimized STIL.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- The Block Diagram -->
+    <div class="section-title">
+      <span>Mechanism Block Diagram</span>
+      <span class="badge">Visual Dataflow</span>
+    </div>
+
+    <div class="diagram-card">
+      <svg class="clean-diagram" viewBox="0 0 960 380" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="g-blue" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#0284c7" />
+            <stop offset="100%" stop-color="#0369a1" />
+          </linearGradient>
+          <linearGradient id="g-purple" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#7c3aed" />
+            <stop offset="100%" stop-color="#6d28d9" />
+          </linearGradient>
+          <linearGradient id="g-amber" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#d97706" />
+            <stop offset="100%" stop-color="#b45309" />
+          </linearGradient>
+          <linearGradient id="g-green" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#059669" />
+            <stop offset="100%" stop-color="#047857" />
+          </linearGradient>
+          <marker id="arr-b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+          </marker>
+          <marker id="arr-g" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981" />
+          </marker>
+        </defs>
+
+        <!-- Step 1: Add STIL Files -->
+        <g>
+          <rect x="20" y="50" width="160" height="110" rx="10" fill="#161f33" stroke="#38bdf8" stroke-width="1.8" />
+          <rect x="20" y="50" width="160" height="26" rx="10" fill="#1e293b" />
+          <text x="35" y="68" fill="#38bdf8" font-size="11" font-weight="700">1. ADD STIL FILES</text>
+          <text x="35" y="98" fill="#f8fafc" font-size="12" font-weight="600">&bull; Stuck-At STILs</text>
+          <text x="35" y="118" fill="#f8fafc" font-size="12" font-weight="600">&bull; ScanShift STILs</text>
+          <text x="35" y="138" fill="#f8fafc" font-size="12" font-weight="600">&bull; MBIST STILs</text>
+        </g>
+
+        <!-- Arrow 1 to 2 -->
+        <path d="M 180 105 L 210 105" stroke="#38bdf8" stroke-width="2.5" fill="none" marker-end="url(#arr-b)" />
+
+        <!-- Step 2: Analyze Test Setup -->
+        <g>
+          <rect x="215" y="50" width="175" height="110" rx="10" fill="#161f33" stroke="#38bdf8" stroke-width="1.8" />
+          <rect x="215" y="50" width="175" height="26" rx="10" fill="#1e293b" />
+          <text x="230" y="68" fill="#38bdf8" font-size="11" font-weight="700">2. ANALYZE TEST SETUP</text>
+          <text x="230" y="96" fill="#f8fafc" font-size="11" font-weight="600">Extracts TEST_SETUP</text>
+          <text x="230" y="114" fill="#94a3b8" font-size="10">Unrolls Loop N &rarr; N clocks</text>
+          <text x="230" y="132" fill="#94a3b8" font-size="10">6-Pin Vector Matrix</text>
+          <text x="230" y="148" fill="#38bdf8" font-size="10">Genuine Commonality %</text>
+        </g>
+
+        <!-- Arrow 2 to 3 -->
+        <path d="M 390 105 L 420 105" stroke="#38bdf8" stroke-width="2.5" fill="none" marker-end="url(#arr-b)" />
+
+        <!-- Step 3: Rules Applied -->
+        <g>
+          <rect x="425" y="50" width="175" height="110" rx="10" fill="#161f33" stroke="#a855f7" stroke-width="1.8" />
+          <rect x="425" y="50" width="175" height="26" rx="10" fill="#1e293b" />
+          <text x="440" y="68" fill="#a855f7" font-size="11" font-weight="700">3. RULES APPLIED</text>
+          <text x="440" y="96" fill="#f8fafc" font-size="11" font-weight="600">Deterministic DFT Rules</text>
+          <text x="440" y="114" fill="#f59e0b" font-size="10">&bull; Duplicate reset hold</text>
+          <text x="440" y="130" fill="#f59e0b" font-size="10">&bull; 2nd TAP reset (5x TMS)</text>
+          <text x="440" y="146" fill="#10b981" font-size="10">&bull; PROTECT: SIB / TDR / IR</text>
+        </g>
+
+        <!-- Arrow 3 to 4 -->
+        <path d="M 600 105 L 630 105" stroke="#a855f7" stroke-width="2.5" fill="none" marker-end="url(#arr-b)" />
+
+        <!-- Step 4: Learning-to-Defer Model -->
+        <g>
+          <rect x="635" y="50" width="180" height="110" rx="10" fill="#161f33" stroke="#a855f7" stroke-width="1.8" />
+          <rect x="635" y="50" width="180" height="26" rx="10" fill="#1e293b" />
+          <text x="650" y="68" fill="#a855f7" font-size="11" font-weight="700">4. LEARNING-TO-DEFER</text>
+          <text x="650" y="96" fill="#f8fafc" font-size="11" font-weight="600">GBC Machine Learning</text>
+          <text x="650" y="114" fill="#94a3b8" font-size="10">Scores P(cut) per clock</text>
+          <text x="650" y="130" fill="#10b981" font-size="10">High Conf: Cut / Keep</text>
+          <text x="650" y="146" fill="#f59e0b" font-size="10">Borderline: Defer to Human</text>
+        </g>
+
+        <!-- Arrow 4 to 5 (down & right) -->
+        <path d="M 815 105 L 850 105 L 850 250 L 780 250" stroke="#10b981" stroke-width="2.5" fill="none" marker-end="url(#arr-g)" />
+
+        <!-- Step 5: Shows Report & Recommends -->
+        <g>
+          <rect x="425" y="200" width="350" height="105" rx="10" fill="#161f33" stroke="#10b981" stroke-width="2" />
+          <rect x="425" y="200" width="350" height="26" rx="10" fill="#1e293b" />
+          <text x="440" y="218" fill="#10b981" font-size="11" font-weight="700">5. REPORT & RECOMMENDATIONS (KEEP vs REDUNDANT)</text>
+          <text x="440" y="246" fill="#f8fafc" font-size="12" font-weight="600">Clock-by-clock review table with clear labels & reasons</text>
+          <text x="440" y="266" fill="#10b981" font-size="11">&bull; KEEP (1503 clocks): SIB, TDR, IR, first reset, TAP transitions</text>
+          <text x="440" y="284" fill="#f59e0b" font-size="11">&bull; REDUNDANT (97 clocks): Duplicate reset, 2nd TAP reset, extra idle</text>
+        </g>
+
+        <!-- Step 6: Output Optimized STIL -->
+        <g>
+          <rect x="70" y="200" width="280" height="105" rx="10" fill="#161f33" stroke="#059669" stroke-width="1.8" />
+          <rect x="70" y="200" width="280" height="26" rx="10" fill="#1e293b" />
+          <text x="85" y="218" fill="#10b981" font-size="11" font-weight="700">6. OPTIMIZED STIL GENERATION</text>
+          <text x="85" y="246" fill="#f8fafc" font-size="12" font-weight="600">Rewrites TEST_SETUP (1503 clocks)</text>
+          <text x="85" y="266" fill="#38bdf8" font-size="11">&bull; Payload vectors 100% untouched</text>
+          <text x="85" y="284" fill="#94a3b8" font-size="11">&bull; Exports *_opt.stil and ZIP bundle</text>
+        </g>
+
+        <!-- Arrow 5 to 6 -->
+        <path d="M 425 252 L 355 252" stroke="#10b981" stroke-width="2.5" fill="none" marker-end="url(#arr-g)" />
+
+        <!-- Human feedback loop from 5 back to 4 -->
+        <path d="M 600 200 L 600 175 L 725 175 L 725 163" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4" fill="none" marker-end="url(#arr-g)" />
+        <text x="615" y="188" fill="#f59e0b" font-size="10" font-weight="600">Active Engineer Review & Retrain Loop</text>
+      </svg>
+    </div>
+
+    <!-- The 5 Steps Explained Simply -->
+    <div class="section-title">
+      <span>The 5 Mechanism Steps Explained</span>
+      <span class="badge">Walkthrough</span>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3><span style="color:var(--blue)">Step 1 & 2:</span> Add STIL Files & Analyze Test Setup</h3>
+        <p>The engineer loads STIL files into the tool (such as Stuck-At, ScanShift, or MBIST files for different chip partitions).</p>
+        <ul>
+          <li><strong>Extracts Setup:</strong> The parser isolates the <code>TEST_SETUP</code> bring-up and stops where the real scan test patterns start.</li>
+          <li><strong>Unrolls Clocks:</strong> Expand loops (e.g. <code>Loop 5</code> becomes 5 individual tester clocks) so every clock cycle can be inspected.</li>
+          <li><strong>Genuine Commonality:</strong> Lines up files clock-by-clock and measures how much of the setup is identical across files.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span style="color:var(--purple)">Step 3:</span> Apply Deterministic DFT Rules</h3>
+        <p>Known DFT & JTAG rules check for obvious wasted cycles that do zero hardware work:</p>
+        <ul>
+          <li><strong>Duplicate Reset Hold:</strong> Identical reset pin levels to the clock before (the chip is already in reset; no new edge is made).</li>
+          <li><strong>Second TAP Reset:</strong> A 5-clock <code>TMS=1</code> reset when <code>TRST</code> already put the TAP in Test-Logic-Reset.</li>
+          <li><strong>Extra Idle:</strong> Static <code>TCK=0</code> holds after reset is already released or after Update-DR already latched data.</li>
+          <li><strong>Protected Clocks:</strong> SIB partition bits, TDR config bits, and Shift-IR instructions are permanently protected and cannot be cut.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span style="color:var(--amber)">Step 4:</span> Learning-to-Defer (LtD) Model</h3>
+        <p>A machine learning model (Gradient Boosting) works alongside the rules to evaluate each clock:</p>
+        <ul>
+          <li><strong>Confidence Score:</strong> Calculates probability $P(\text{cut})$ that an experienced test engineer would approve removing the clock.</li>
+          <li><strong>Automatic Recommendation:</strong> High probability &rarr; Recommend Redundant; Low probability &rarr; Recommend Keep.</li>
+          <li><strong>Learning-to-Defer:</strong> Borderline cases ($0.35$ to $0.65$) are marked <em>Defer</em>, asking the engineer to make the final call.</li>
+          <li><strong>Learns from Engineer:</strong> When you click Keep or Reject, the model saves the decision and retrains so it gets smarter over time.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span style="color:var(--green)">Step 5:</span> Shows Report & Recommends Keep / Redundant</h3>
+        <p>The dashboard displays an easy-to-read report showing every setup clock, the applied rule, and the model recommendation:</p>
+        <ul>
+          <li><strong>Keep:</strong> Clocks required to initialize the chip, open the partition SIB, and configure registers.</li>
+          <li><strong>Redundant:</strong> Wasted duplicate holds or extra idle clocks recommended for deletion.</li>
+          <li><strong>Zero Risk:</strong> Nothing is deleted until the engineer approves. Then, it outputs clean <code>*_opt.stil</code> files with untouched test payloads.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Example Report Table Preview -->
+    <div class="section-title">
+      <span>How the Report Shows Recommendations</span>
+      <span class="badge">Example Dashboard Report</span>
+    </div>
+
+    <div class="table-card">
+      <table>
+        <thead>
+          <tr>
+            <th>Clock Range</th>
+            <th>Bring-up Step</th>
+            <th>Rule Applied</th>
+            <th>Recommendation</th>
+            <th>Reason / Explanation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Clock #0</td>
+            <td>Assert RESET and TRST</td>
+            <td><code>RULE-RST-INIT</code></td>
+            <td><span class="tag-keep">KEEP</span></td>
+            <td>Initializes chip logic & TAP from unknown power-up state. Essential.</td>
+          </tr>
+          <tr>
+            <td>Clock #1</td>
+            <td>Duplicate Reset Hold</td>
+            <td><code>RULE-DUP-HOLD</code></td>
+            <td><span class="tag-redundant">REDUNDANT</span></td>
+            <td>Identical pins to Clock 0. Chip is already in reset. Wasted clock.</td>
+          </tr>
+          <tr>
+            <td>Clock #2</td>
+            <td>Release TRST (TAP Reset)</td>
+            <td><code>RULE-TAP-RESET</code></td>
+            <td><span class="tag-keep">KEEP</span></td>
+            <td>TRST goes 0 to 1, putting TAP in Test-Logic-Reset. Required by IEEE 1149.1.</td>
+          </tr>
+          <tr>
+            <td>Clocks #3 &ndash; #7</td>
+            <td>Second TAP Reset (5x TMS=1)</td>
+            <td><code>RULE-2ND-TAP</code></td>
+            <td><span class="tag-redundant">REDUNDANT</span></td>
+            <td>TRST already reset TAP. These 5 clocks reset an already-reset TAP. Zero new effect.</td>
+          </tr>
+          <tr>
+            <td>Clock #8</td>
+            <td>Release RESET toward Idle</td>
+            <td><code>RULE-RST-REL</code></td>
+            <td><span class="tag-keep">KEEP</span></td>
+            <td>Releases RESET so scan chains and TAP can become active.</td>
+          </tr>
+          <tr>
+            <td>Clock #9</td>
+            <td>Extra Idle after Reset Release</td>
+            <td><code>RULE-IDLE-HOLD</code></td>
+            <td><span class="tag-redundant">REDUNDANT</span></td>
+            <td>RESET is already 1 and TMS is 0. Static TCK=0 hold does not change state.</td>
+          </tr>
+          <tr>
+            <td>Clocks #10 &ndash; #41</td>
+            <td>Shift-IR (IEEE 1687 Access)</td>
+            <td><code>PROT-IR-INSTRUCT</code></td>
+            <td><span class="tag-keep">KEEP</span></td>
+            <td>Protected: Instruction that connects TDI/TDO to the IJTAG network. Must keep.</td>
+          </tr>
+          <tr>
+            <td>Clocks #44 &ndash; #107</td>
+            <td>Shift-DR SIB Network</td>
+            <td><code>PROT-SIB-SELECT</code></td>
+            <td><span class="tag-keep">KEEP</span></td>
+            <td>Protected: Opens the target partition (island). Cutting any bit selects wrong island.</td>
+          </tr>
+          <tr>
+            <td>Clocks #108 &ndash; #1507</td>
+            <td>Shift-DR TDR Config</td>
+            <td><code>PROT-TDR-CONFIG</code></td>
+            <td><span class="tag-keep">KEEP</span></td>
+            <td>Protected: 1400-bit register config for scan/EDT path. Critical test data.</td>
+          </tr>
+          <tr>
+            <td>Clocks #1508 &ndash; #1509</td>
+            <td>Exit-DR / Update-DR to Idle</td>
+            <td><code>PROT-LATCH-UPDATE</code></td>
+            <td><span class="tag-keep">KEEP</span></td>
+            <td>Protected: Latches the SIB and TDR configuration into hardware registers.</td>
+          </tr>
+          <tr>
+            <td>Clocks #1510 &ndash; #1599</td>
+            <td>Post-IJTAG Idle Tail (90 clocks)</td>
+            <td><code>RULE-TAIL-IDLE</code></td>
+            <td><span class="tag-redundant">REDUNDANT</span></td>
+            <td>Data is already latched on Update-DR. No PLL lock wait needed in this kit. Wasted idle.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Summary Box -->
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-val blue">1600 &rarr; 1503</div>
+        <div class="stat-label">Setup Clocks (97 Redundant Cut)</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val green">100% Safe</div>
+        <div class="stat-label">Payload Scan Vectors Untouched</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val amber">68.7% Saved</div>
+        <div class="stat-label">Shared Bring-up Across Test Types</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <p>STIL Test-Setup Sequence Optimizer &bull; Basic Mechanism Design Document &bull; Saved in Project Folder</p>
+    <p style="margin-top:6px;">
+      <a href="dashboard/static/guide.html" style="color:var(--blue); text-decoration:none;">User Guide</a> &bull;
+      <a href="dashboard/static/index.html" style="color:var(--blue); text-decoration:none;">Live Dashboard</a>
+    </p>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,149 @@
+/*****************************************************************************
+ * File       : fault_cellaware_atpg.stil
+ * Design     : DUT_TOP
+ * ATPG Type  : FAULT-SPECIFIC  (Cell-Aware + IDDQ)
+ * Source     : Fault-model ATPG tool run #1 (cell-aware library, separate
+ *              invocation from the structural run -- different engineer,
+ *              two weeks later, same netlist revision)
+ * Notes      : Independently generated deck. Reset procedure is *intended*
+ *              to be functionally identical to structural_atpg.stil's
+ *              power_on_reset / scan_reset_all_chains, but has drifted:
+ *              renamed labels, a longer PORB wait margin, and an extra
+ *              IDDQ settle wait not present in the structural deck.
+ *              This drift is exactly the kind of redundancy the
+ *              commonality-check + reset-minimization methodology targets.
+ *****************************************************************************/
+STIL 1.0;
+
+Header {
+  Title "DUT_TOP Cell-Aware / IDDQ Fault Patterns";
+  Date "2026-08-16";
+  Source "ATPG_TOOL_A v21.3 -- cell-aware fault model, IDDQ measurement flow";
+  History { Annotation "Generated from scan-inserted netlist rev G4 (same as structural run)"; }
+}
+
+Signals {
+  TCK      In;
+  TMS      In;
+  TDI      In;
+  TDO      Out;
+  TRST     In;
+  PORB     In;
+  CLK      In;
+  RESETN   In;
+  SE       In;
+  SI0      In;       SI1  In;      SI2  In;      SI3  In;
+  SO0      Out;       SO1  Out;      SO2  Out;      SO3  Out;
+  DATA_IN  In;
+  DATA_OUT Out;
+  VALID    In;
+  READY    Out;
+  IDDQ_EN  In;        // present only in this deck -- fault-model-specific pin
+}
+
+SignalGroups {
+  "ScanChains_In"  = 'SI0 + SI1 + SI2 + SI3';
+  "ScanChains_Out" = 'SO0 + SO1 + SO2 + SO3';
+  "PowerPins"      = 'PORB';
+  "JTAGPins"       = 'TCK + TMS + TDI + TDO + TRST';
+  "FuncIn"         = 'DATA_IN + VALID';
+  "FuncOut"        = 'DATA_OUT + READY';
+}
+
+// Identical to structural_atpg.stil byte-for-byte except for the comment
+// header -- a 100%-confidence "Timing block" commonality match.
+Timing {
+  WaveformTable WFT_100MHz {
+    Period '10ns';
+    Waveforms {
+      CLK      { '0' D/U { '0ns' Z; '5ns' U; } '1' D/D { '0ns' Z; '5ns' D; } }
+      TCK      { '0' D/U { '0ns' Z; '5ns' U; } '1' D/D { '0ns' Z; '5ns' D; } }
+      RESETN   { 'X' X { '0ns' X; } '0' D { '0ns' D; } '1' U { '0ns' U; } }
+      DATA_IN  { '0' D { '1ns' D; } '1' U { '1ns' U; } }
+      DATA_OUT { 'H' X { '8ns' X; } 'L' X { '8ns' X; } }
+      SI0      { '0' D { '1ns' D; } '1' U { '1ns' U; } }
+      SO0      { 'H' X { '8ns' X; } 'L' X { '8ns' X; } }
+    }
+  }
+}
+
+Procedures {
+
+  // --- Reset / initialization procedures ------------------------------
+  // NOTE relative to structural_atpg.stil's power_on_reset:
+  //   - renamed:            power_on_reset       -> poweron_rst_ca
+  //   - WaitCycles drift:   20 -> 25 after PORB assert (extra margin)
+  //   - added tail:         extra 12-cycle IDDQ settle wait not present
+  //                         in the structural deck
+  Procedure poweron_rst_ca {
+    W PowerWave;
+    V { PORB=0; TCK=0; TMS=1; RESETN=0; } Ann {"POR assert"}
+    WaitCycles 25;
+    V { PORB=1; }
+    WaitCycles 10;
+    V { TRST=0; }
+    WaitCycles 5;
+    V { TRST=1; }
+    WaitCycles 8;
+    V { RESETN=1; }
+    WaitCycles 4;
+    V { IDDQ_EN=0; }
+    WaitCycles 12; Ann {"extra IDDQ settle margin -- fault-model-specific"}
+  }
+
+  // NOTE: functionally identical to structural_atpg.stil's
+  // scan_reset_all_chains, renamed and reordered (SE toggled with a
+  // different Repeat count: 6 -> 8), still semantically equivalent.
+  Procedure scan_flush_ca {
+    V { SE=1; } Ann {"enable scan mode"}
+    Repeat 8 {
+      W WFT_100MHz;
+      V { SI0=0; SI1=0; SI2=0; SI3=0; CLK=P; } Ann {"flush scan chains to known 0 state"}
+    }
+    V { SE=0; }
+  }
+
+  Procedure scan_load_unload {
+    V { SE=1; }
+    Repeat 128 {
+      W WFT_100MHz;
+      V { SI0=#; SI1=#; SI2=#; SI3=#; CLK=P; SO0=#; SO1=#; SO2=#; SO3=#; }
+    }
+    V { SE=0; }
+  }
+
+  Procedure capture_iddq {
+    W WFT_100MHz;
+    V { CLK=P; } Ann {"capture pulse"}
+    V { IDDQ_EN=1; }
+    WaitCycles 50; Ann {"quiescent current settle prior to IDDQ measurement"}
+    Measure { IDDQ_EN; } Ann {"IDDQ current measurement window"}
+    V { IDDQ_EN=0; }
+  }
+}
+
+PatternBurst "cellaware_burst" {
+  PatList {
+    "reset_init_ca";
+    "cellaware_patterns";
+  }
+}
+
+PatternExec {
+  PatternBurst "cellaware_burst";
+}
+
+Pattern reset_init_ca {
+  Call poweron_rst_ca;
+  Call scan_flush_ca;
+}
+
+Pattern cellaware_patterns {
+  // Representative cell-aware + IDDQ pattern set.
+  // Full deck contains ~9,200 patterns; excerpt shown below.
+  Call scan_load_unload;
+  Call capture_iddq;
+  Call scan_load_unload;
+  Call capture_iddq;
+  Ann {"... 9,198 additional cell-aware/IDDQ patterns omitted from excerpt ..."}
+}
